@@ -1,5 +1,7 @@
 import sys
-
+import json
+from pathlib import Path
+import sqlite3  # Adicione esta importação
 from qt_core import *
 from gui.windows.main_window.ui_main_window import *
 from utils_banco_dados.banco_dados import Banco_Dados
@@ -15,6 +17,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
+       
         self.name_user = ''
         self.choiced_date = False
 
@@ -1130,7 +1133,7 @@ class MainWindow(QMainWindow):
         self.ui.ui_pages.input_vendas_pix_direto_cpf_dia_fecham_cx.setText(valor_float_be_para_fe(vendas_pix_direto_cpf))
         self.ui.ui_pages.input_total_maq_cartoes_fecham_cx.setText(valor_float_be_para_fe(vendas_operadoras_maq_cartao))
 
-        self.apuracao_resultado_caixa()
+        #self.apuracao_resultado_caixa()
 
     def modo_completo(self):
         
@@ -1614,6 +1617,9 @@ class MainWindow(QMainWindow):
     def verificador_first_time(self):
         # verifica se bd existe
 
+        print('verificações')
+        self.processar_atualizacoes_pendentes()
+
         from utils_banco_dados.conexao import Conexao
         conexao = Conexao()
 
@@ -1689,6 +1695,63 @@ class MainWindow(QMainWindow):
         self.apuracao_resultado_caixa()
         self.limpar_entradas_n_maquina()
         return
+
+    def processar_atualizacoes_pendentes(self):
+        import os
+        print('verificando caminhos para a importação do updates.json')
+        
+        # Caminhos
+        
+        db_path = os.path.join(r"C:\marcio\programas\app_cashier\database_app\app_cashier.db")
+        json_path = os.path.join(r"C:\marcio\programas\app_cashier\database_app\updates.json")
+       
+        if not os.path.exists(json_path):
+            print('updates.json não existe')
+            print()
+            return False
+        
+        print("[Atualizações] Processando...")
+        
+        conn = None
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                updates = json.load(f)
+            
+            # Conexão direta (mais segura)
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("BEGIN TRANSACTION")
+            
+            total = 0
+            
+            # Tabelas
+            tabelas = [
+                ('observacoes_caixa', updates['updates']['observacoes_caixa']),
+                ('dados_fechamentos_caixa', updates['updates']['dados_fechamentos_caixa']),
+                ('despesas_caixa', updates['updates']['despesas_caixa']),
+                ('fechamentos_parciais_caixa', updates['updates']['fechamentos_parciais_caixa']),
+            ]
+            
+            for tabela, ids in tabelas:
+                if ids:
+                    for id_reg in ids:
+                        cursor.execute(f"UPDATE {tabela} SET read_app_parent = 1 WHERE id = ?", (id_reg,))
+                    total += len(ids)
+                    print(f"[Atualizações] ✅ {tabela}: {len(ids)} registros")
+            
+            conn.commit()
+            os.remove(json_path)
+            print(f"[Atualizações] ✅ Total: {total} registros atualizados")
+            return True
+            
+        except Exception as e:
+            print(f"[Atualizações] ❌ Erro: {e}")
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()
 
 def valor_str_fe_para_be(valor):
     

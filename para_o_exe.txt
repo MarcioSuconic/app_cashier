@@ -1,0 +1,1 @@
+pyinstaller --onefile --windowed --name app_cashier --add-data "gui;gui" --add-data "app;app" --add-data "utils_banco_dados;utils_banco_dados" --add-data "qt_core.py;." main.py
